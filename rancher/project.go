@@ -5,7 +5,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/libcompose/config"
 	"github.com/docker/libcompose/project"
-	"github.com/rancher/rancher-compose/preprocess"
+	"github.com/ouzklcn/rancher-compose/preprocess"
 	"io/ioutil"
 )
 

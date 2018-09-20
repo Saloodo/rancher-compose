@@ -10,9 +10,9 @@ import (
 	"github.com/docker/libcompose/lookup"
 	"github.com/docker/libcompose/project"
 	"github.com/docker/libcompose/project/options"
-	rLookup "github.com/rancher/rancher-compose/lookup"
-	"github.com/rancher/rancher-compose/rancher"
-	"github.com/rancher/rancher-compose/upgrade"
+	rLookup "github.com/ouzklcn/rancher-compose/lookup"
+	"github.com/ouzklcn/rancher-compose/rancher"
+	"github.com/ouzklcn/rancher-compose/upgrade"
 	"github.com/urfave/cli"
 )
 

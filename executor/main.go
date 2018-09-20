@@ -6,8 +6,8 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/rancher/event-subscriber/events"
 	"github.com/rancher/go-rancher/v2"
-	"github.com/rancher/rancher-compose/executor/handlers"
-	"github.com/rancher/rancher-compose/version"
+	"github.com/ouzklcn/rancher-compose/executor/handlers"
+	"github.com/ouzklcn/rancher-compose/version"
 )
 
 func Main() {

@@ -3,7 +3,7 @@ package rancher
 import (
 	"github.com/Sirupsen/logrus"
 	"github.com/rancher/go-rancher/v2"
-	"github.com/rancher/rancher-compose/digest"
+	"github.com/ouzklcn/rancher-compose/digest"
 )
 
 func (r *RancherService) upgrade(service *client.Service, force bool, selected []string) (*client.Service, error) {

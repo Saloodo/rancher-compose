@@ -6,8 +6,8 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/libcompose/project"
 	"github.com/rancher/go-rancher/v2"
-	"github.com/rancher/rancher-compose/lookup"
-	"github.com/rancher/rancher-compose/rancher"
+	"github.com/ouzklcn/rancher-compose/lookup"
+	"github.com/ouzklcn/rancher-compose/rancher"
 )
 
 func constructProjectUpgrade(logger *logrus.Entry, stack *client.Stack, upgradeOpts client.StackUpgrade, url, accessKey, secretKey string) (*project.Project, map[string]interface{}, error) {

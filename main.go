@@ -7,9 +7,9 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/libcompose/cli/command"
-	rancherApp "github.com/rancher/rancher-compose/app"
-	"github.com/rancher/rancher-compose/executor"
-	"github.com/rancher/rancher-compose/version"
+	rancherApp "github.com/ouzklcn/rancher-compose/app"
+	"github.com/ouzklcn/rancher-compose/executor"
+	"github.com/ouzklcn/rancher-compose/version"
 	"github.com/urfave/cli"
 )
 

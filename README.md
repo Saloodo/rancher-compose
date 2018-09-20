@@ -1,10 +1,10 @@
-# Rancher Compose [![Build Status](http://ci.rancher.io/api/badge/github.com/rancher/rancher-compose/status.svg?branch=master)](http://ci.rancher.io/github.com/rancher/rancher-compose)
+# Rancher Compose [![Build Status](http://ci.rancher.io/api/badge/github.com/ouzklcn/rancher-compose/status.svg?branch=master)](http://ci.rancher.io/github.com/ouzklcn/rancher-compose)
 
 Docker compose compatible client that deploys to [Rancher](https://github.com/rancher/rancher).
 
 ## Binaries
 
-Binaries are available for Linux, OS X, and Windows. Refer to the latest [release](https://github.com/rancher/rancher-compose/releases).
+Binaries are available for Linux, OS X, and Windows. Refer to the latest [release](https://github.com/ouzklcn/rancher-compose/releases).
 
 ## Building
 Run `make build` to create `./bin/rancher-compose`

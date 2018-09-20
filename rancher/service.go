@@ -20,7 +20,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rancher/go-rancher/hostaccess"
 	"github.com/rancher/go-rancher/v2"
-	rUtils "github.com/rancher/rancher-compose/utils"
+	rUtils "github.com/ouzklcn/rancher-compose/utils"
 )
 
 type Link struct {

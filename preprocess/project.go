@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/docker/libcompose/config"
-	"github.com/rancher/rancher-compose/utils"
+	"github.com/ouzklcn/rancher-compose/utils"
 )
 
 type BindingProperty struct {

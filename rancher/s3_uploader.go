@@ -4,14 +4,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"io"
 	"os"
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/awslabs/aws-sdk-go/aws"
-	"github.com/awslabs/aws-sdk-go/aws/awserr"
-	"github.com/awslabs/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/docker/libcompose/project"
 )
 
@@ -26,12 +27,12 @@ func (s *S3Uploader) Upload(p *project.Project, name string, reader io.ReadSeeke
 	bucketName := fmt.Sprintf("%s-%s", p.Name, someHash())
 	objectKey := fmt.Sprintf("%s-%s", name, hash[:12])
 
-	config := aws.DefaultConfig.Copy()
-	if config.Region == "" {
-		config.Region = "us-east-1"
-	}
 
-	svc := s3.New(&config)
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String("us-west-2")},
+	)
+
+	svc := s3.New(sess)
 
 	if err := getOrCreateBucket(svc, bucketName); err != nil {
 		return "", "", err

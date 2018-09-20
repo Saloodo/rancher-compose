@@ -10,7 +10,7 @@ import (
 	"github.com/docker/libcompose/config"
 	"github.com/docker/libcompose/utils"
 	"github.com/rancher/rancher-catalog-service/model"
-	"github.com/rancher/rancher-compose/rancher"
+	"github.com/ouzklcn/rancher-compose/rancher"
 	"gopkg.in/yaml.v2"
 )
 

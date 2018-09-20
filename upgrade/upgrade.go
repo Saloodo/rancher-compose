@@ -9,7 +9,7 @@ import (
 	"github.com/docker/libcompose/project"
 	"github.com/docker/libcompose/project/options"
 	"github.com/rancher/go-rancher/v2"
-	"github.com/rancher/rancher-compose/rancher"
+	"github.com/ouzklcn/rancher-compose/rancher"
 )
 
 type UpgradeOpts struct {

@@ -17,9 +17,9 @@ import (
 	"github.com/fatih/structs"
 	legacyClient "github.com/rancher/go-rancher/client"
 	"github.com/rancher/go-rancher/v2"
-	"github.com/rancher/rancher-compose/preprocess"
-	rUtils "github.com/rancher/rancher-compose/utils"
-	rVersion "github.com/rancher/rancher-compose/version"
+	"github.com/ouzklcn/rancher-compose/preprocess"
+	rUtils "github.com/ouzklcn/rancher-compose/utils"
+	rVersion "github.com/ouzklcn/rancher-compose/version"
 
 	"github.com/hashicorp/go-version"
 )
