@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/libcompose/config"
 	"github.com/docker/libcompose/docker/service"
@@ -77,7 +77,7 @@ func createLaunchConfig(r *RancherService, name string, serviceConfig *config.Se
 		serviceConfig.Labels = newLabels
 	}
 
-	config, hostConfig, err := service.Convert(serviceConfig, r.context.Context)
+	config, hostConfig, err := service.Convert(serviceConfig, r.context.Context, nil)
 	if err != nil {
 		return result, err
 	}

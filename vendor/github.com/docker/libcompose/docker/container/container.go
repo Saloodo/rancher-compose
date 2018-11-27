@@ -11,12 +11,10 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/promise"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/docker/pkg/term"
 	"github.com/docker/go-connections/nat"
@@ -24,6 +22,7 @@ import (
 	"github.com/docker/libcompose/labels"
 	"github.com/docker/libcompose/logger"
 	"github.com/docker/libcompose/project"
+	"github.com/sirupsen/logrus"
 )
 
 // Container holds information about a docker container and the service it is tied on.
@@ -168,9 +167,8 @@ func (c *Container) Kill(ctx context.Context, signal string) error {
 }
 
 // IsRunning returns the running state of the container.
-// FIXME(vdemeester): remove the nil error here
-func (c *Container) IsRunning(ctx context.Context) (bool, error) {
-	return c.container.State.Running, nil
+func (c *Container) IsRunning(ctx context.Context) bool {
+	return c.container.State.Running
 }
 
 // Run creates, start and attach to the container based on the image name,
@@ -181,6 +179,7 @@ func (c *Container) Run(ctx context.Context, configOverride *config.ServiceConfi
 		errCh       chan error
 		out, stderr io.Writer
 		in          io.ReadCloser
+		inFd        uintptr
 	)
 
 	if configOverride.StdinOpen {
@@ -188,8 +187,6 @@ func (c *Container) Run(ctx context.Context, configOverride *config.ServiceConfi
 	}
 	if configOverride.Tty {
 		out = os.Stdout
-	}
-	if configOverride.Tty {
 		stderr = os.Stderr
 	}
 
@@ -205,21 +202,41 @@ func (c *Container) Run(ctx context.Context, configOverride *config.ServiceConfi
 		return -1, err
 	}
 
-	// set raw terminal
-	inFd, _ := term.GetFdInfo(in)
-	state, err := term.SetRawTerminal(inFd)
-	if err != nil {
-		return -1, err
+	if configOverride.StdinOpen {
+		// set raw terminal
+		inFd, _ = term.GetFdInfo(in)
+		state, err := term.SetRawTerminal(inFd)
+		if err != nil {
+			return -1, err
+		}
+		// restore raw terminal
+		defer term.RestoreTerminal(inFd, state)
 	}
-	// restore raw terminal
-	defer term.RestoreTerminal(inFd, state)
+
 	// holdHijackedConnection (in goroutine)
-	errCh = promise.Go(func() error {
-		return holdHijackedConnection(configOverride.Tty, in, out, stderr, resp)
-	})
+	errCh = make(chan error, 1)
+	go func() {
+		errCh <- holdHijackedConnection(configOverride.Tty, in, out, stderr, resp)
+	}()
 
 	if err := c.client.ContainerStart(ctx, c.container.ID, types.ContainerStartOptions{}); err != nil {
 		return -1, err
+	}
+
+	if configOverride.Tty {
+		ws, err := term.GetWinsize(inFd)
+		if err != nil {
+			return -1, err
+		}
+
+		resizeOpts := types.ResizeOptions{
+			Height: uint(ws.Height),
+			Width:  uint(ws.Width),
+		}
+
+		if err := c.client.ContainerResize(ctx, c.container.ID, resizeOpts); err != nil {
+			return -1, err
+		}
 	}
 
 	if err := <-errCh; err != nil {
@@ -292,16 +309,6 @@ func (c *Container) Start(ctx context.Context) error {
 	return nil
 }
 
-// ID returns the container Id.
-func (c *Container) ID() (string, error) {
-	return c.container.ID, nil
-}
-
-// Name returns the container name.
-func (c *Container) Name() string {
-	return c.container.Name
-}
-
 // Restart restarts the container if existing, does nothing otherwise.
 func (c *Container) Restart(ctx context.Context, timeout int) error {
 	timeoutDuration := time.Duration(timeout) * time.Second
@@ -353,6 +360,21 @@ func (c *Container) Port(ctx context.Context, port string) (string, error) {
 // Networks returns the containers network
 func (c *Container) Networks() (map[string]*network.EndpointSettings, error) {
 	return c.container.NetworkSettings.Networks, nil
+}
+
+// ID returns the container Id.
+func (c *Container) ID() string {
+	return c.container.ID
+}
+
+// ShortID return the container Id in its short form
+func (c *Container) ShortID() string {
+	return c.container.ID[:12]
+}
+
+// Name returns the container name.
+func (c *Container) Name() string {
+	return c.container.Name
 }
 
 // Image returns the container image. Depending on the engine version its either

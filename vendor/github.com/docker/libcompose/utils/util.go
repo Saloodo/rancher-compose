@@ -3,8 +3,9 @@ package utils
 import (
 	"encoding/json"
 	"sync"
+	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"gopkg.in/yaml.v2"
 )
@@ -134,4 +135,44 @@ func Merge(coll1, coll2 []string) []string {
 		r = append(r, k)
 	}
 	return r
+}
+
+// ConvertKeysToStrings converts map[interface{}] to map[string] recursively
+func ConvertKeysToStrings(item interface{}) interface{} {
+	switch typedDatas := item.(type) {
+	case map[string]interface{}:
+		for key, value := range typedDatas {
+			typedDatas[key] = ConvertKeysToStrings(value)
+		}
+		return typedDatas
+	case map[interface{}]interface{}:
+		newMap := make(map[string]interface{})
+		for key, value := range typedDatas {
+			stringKey := key.(string)
+			newMap[stringKey] = ConvertKeysToStrings(value)
+		}
+		return newMap
+	case []interface{}:
+		for i, value := range typedDatas {
+			typedDatas[i] = ConvertKeysToStrings(value)
+		}
+		return typedDatas
+	default:
+		return item
+	}
+}
+
+// DurationStrToSecondsInt converts duration string to *int in seconds
+func DurationStrToSecondsInt(s string) *int {
+	if s == "" {
+		return nil
+	}
+	duration, err := time.ParseDuration(s)
+	if err != nil {
+		logrus.Errorf("Failed to parse duration:%v", s)
+		return nil
+	}
+	r := (int)(duration.Seconds())
+	return &r
+
 }

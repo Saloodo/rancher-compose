@@ -2,7 +2,7 @@ package rancher
 
 import (
 	"encoding/json"
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/docker/libcompose/config"
 	"github.com/docker/libcompose/project"
 	"github.com/ouzklcn/rancher-compose/preprocess"

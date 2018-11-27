@@ -3,7 +3,7 @@ package rancher
 import (
 	"fmt"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/docker/libcompose/utils"
 	"github.com/rancher/go-rancher/v2"
 	"github.com/ouzklcn/rancher-compose/digest"

@@ -7,23 +7,22 @@ import (
 	"io"
 	"os"
 
-	"golang.org/x/net/context"
-
-	"github.com/Sirupsen/logrus"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/term"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
 	"github.com/docker/libcompose/docker/auth"
+	"github.com/sirupsen/logrus"
+	"golang.org/x/net/context"
 )
 
 // Exists return whether or not the service image already exists
 func Exists(ctx context.Context, clt client.ImageAPIClient, image string) (bool, error) {
 	_, err := InspectImage(ctx, clt, image)
 	if err != nil {
-		if client.IsErrImageNotFound(err) {
+		if client.IsErrNotFound(err) {
 			return false, nil
 		}
 		return false, err
@@ -49,7 +48,7 @@ func RemoveImage(ctx context.Context, client client.ImageAPIClient, image string
 // to the daemon store with the specified client.
 func PullImage(ctx context.Context, client client.ImageAPIClient, serviceName string, authLookup auth.Lookup, image string) error {
 	fmt.Fprintf(os.Stderr, "Pulling %s (%s)...\n", serviceName, image)
-	distributionRef, err := reference.ParseNamed(image)
+	distributionRef, err := reference.ParseNormalizedNamed(image)
 	if err != nil {
 		return err
 	}

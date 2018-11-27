@@ -2,20 +2,20 @@ package service
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
-	"github.com/docker/docker/api/types/blkiodev"
+	"github.com/docker/cli/opts"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/strslice"
-	"github.com/docker/docker/runconfig/opts"
 	"github.com/docker/go-connections/nat"
 	"github.com/docker/go-units"
 	"github.com/docker/libcompose/config"
+	composeclient "github.com/docker/libcompose/docker/client"
+	composecontainer "github.com/docker/libcompose/docker/container"
 	"github.com/docker/libcompose/project"
 	"github.com/docker/libcompose/utils"
-	"github.com/docker/libcompose/yaml"
+	"golang.org/x/net/context"
 )
 
 // ConfigWrapper wraps Config, HostConfig and NetworkingConfig for a container.
@@ -55,8 +55,8 @@ func isVolume(s string) bool {
 }
 
 // ConvertToAPI converts a service configuration to a docker API container configuration.
-func ConvertToAPI(serviceConfig *config.ServiceConfig, ctx project.Context) (*ConfigWrapper, error) {
-	config, hostConfig, err := Convert(serviceConfig, ctx)
+func ConvertToAPI(serviceConfig *config.ServiceConfig, ctx project.Context, clientFactory composeclient.Factory) (*ConfigWrapper, error) {
+	config, hostConfig, err := Convert(serviceConfig, ctx, clientFactory)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func ports(c *config.ServiceConfig) (map[nat.Port]struct{}, nat.PortMap, error) 
 }
 
 // Convert converts a service configuration to an docker API structures (Config and HostConfig)
-func Convert(c *config.ServiceConfig, ctx project.Context) (*container.Config, *container.HostConfig, error) {
+func Convert(c *config.ServiceConfig, ctx project.Context, clientFactory composeclient.Factory) (*container.Config, *container.HostConfig, error) {
 	restartPolicy, err := restartPolicy(c)
 	if err != nil {
 		return nil, nil, err
@@ -166,6 +166,7 @@ func Convert(c *config.ServiceConfig, ctx project.Context) (*container.Config, *
 		Volumes:      toMap(Filter(vols, isVolume)),
 		MacAddress:   c.MacAddress,
 		StopSignal:   c.StopSignal,
+		StopTimeout:  utils.DurationStrToSecondsInt(c.StopGracePeriod),
 	}
 
 	ulimits := []*units.Ulimit{}
@@ -181,6 +182,59 @@ func Convert(c *config.ServiceConfig, ctx project.Context) (*container.Config, *
 
 	memorySwappiness := int64(c.MemSwappiness)
 
+	resources := container.Resources{
+		CgroupParent:      c.CgroupParent,
+		Memory:            int64(c.MemLimit),
+		MemoryReservation: int64(c.MemReservation),
+		MemorySwap:        int64(c.MemSwapLimit),
+		MemorySwappiness:  &memorySwappiness,
+		CPUShares:         int64(c.CPUShares),
+		CPUQuota:          int64(c.CPUQuota),
+		CpusetCpus:        c.CPUSet,
+		Ulimits:           ulimits,
+		Devices:           deviceMappings,
+		OomKillDisable:    &c.OomKillDisable,
+	}
+
+	networkMode := c.NetworkMode
+	if c.NetworkMode == "" {
+		if c.Networks != nil && len(c.Networks.Networks) > 0 {
+			networkMode = c.Networks.Networks[0].RealName
+		}
+	} else {
+		switch {
+		case strings.HasPrefix(c.NetworkMode, "service:"):
+			serviceName := c.NetworkMode[8:]
+			if serviceConfig, ok := ctx.Project.ServiceConfigs.Get(serviceName); ok {
+				// FIXME(vdemeester) this is actually not right, should be fixed but not there
+				service, err := ctx.ServiceFactory.Create(ctx.Project, serviceName, serviceConfig)
+				if err != nil {
+					return nil, nil, err
+				}
+				containers, err := service.Containers(context.Background())
+				if err != nil {
+					return nil, nil, err
+				}
+				if len(containers) != 0 {
+					container := containers[0]
+					containerID := container.ID()
+					networkMode = "container:" + containerID
+				}
+				// FIXME(vdemeester) log/warn in case of len(containers) == 0
+			}
+		case strings.HasPrefix(c.NetworkMode, "container:"):
+			containerName := c.NetworkMode[10:]
+			client := clientFactory.Create(nil)
+			container, err := composecontainer.Get(context.Background(), client, containerName)
+			if err != nil {
+				return nil, nil, err
+			}
+			networkMode = "container:" + container.ID
+		default:
+			// do nothing :)
+		}
+	}
+
 	tmpfs := map[string]string{}
 	for _, path := range c.Tmpfs {
 		split := strings.SplitN(path, ":", 2)
@@ -189,62 +243,6 @@ func Convert(c *config.ServiceConfig, ctx project.Context) (*container.Config, *
 		} else if len(split) == 2 {
 			tmpfs[split[0]] = split[1]
 		}
-	}
-
-	blkioWeightDevices := []*blkiodev.WeightDevice{}
-	for _, blkioWeightDevice := range c.BlkioWeightDevice {
-		split := strings.Split(blkioWeightDevice, ":")
-		if len(split) == 2 {
-			weight, err := strconv.ParseUint(split[1], 10, 16)
-			if err != nil {
-				return nil, nil, err
-			}
-			blkioWeightDevices = append(blkioWeightDevices, &blkiodev.WeightDevice{
-				Path:   split[0],
-				Weight: uint16(weight),
-			})
-		}
-	}
-
-	blkioDeviceReadBps, err := getThrottleDevice(c.DeviceReadBps)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	blkioDeviceReadIOps, err := getThrottleDevice(c.DeviceReadIOps)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	blkioDeviceWriteBps, err := getThrottleDevice(c.DeviceWriteBps)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	blkioDeviceWriteIOps, err := getThrottleDevice(c.DeviceWriteIOps)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	resources := container.Resources{
-		BlkioWeight:          uint16(c.BlkioWeight),
-		BlkioWeightDevice:    blkioWeightDevices,
-		CgroupParent:         c.CgroupParent,
-		Memory:               int64(c.MemLimit),
-		MemoryReservation:    int64(c.MemReservation),
-		MemorySwap:           int64(c.MemSwapLimit),
-		MemorySwappiness:     &memorySwappiness,
-		CPUPeriod:            int64(c.CPUPeriod),
-		CPUShares:            int64(c.CPUShares),
-		CPUQuota:             int64(c.CPUQuota),
-		CpusetCpus:           c.CPUSet,
-		Ulimits:              ulimits,
-		Devices:              deviceMappings,
-		OomKillDisable:       &c.OomKillDisable,
-		BlkioDeviceReadBps:   blkioDeviceReadBps,
-		BlkioDeviceReadIOps:  blkioDeviceReadIOps,
-		BlkioDeviceWriteBps:  blkioDeviceWriteBps,
-		BlkioDeviceWriteIOps: blkioDeviceWriteIOps,
 	}
 
 	hostConfig := &container.HostConfig{
@@ -256,14 +254,14 @@ func Convert(c *config.ServiceConfig, ctx project.Context) (*container.Config, *
 		Privileged:  c.Privileged,
 		Binds:       Filter(vols, isBind),
 		DNS:         utils.CopySlice(c.DNS),
-		DNSOptions:  utils.CopySlice(c.DNSOpt),
+		DNSOptions:  utils.CopySlice(c.DNSOpts),
 		DNSSearch:   utils.CopySlice(c.DNSSearch),
 		Isolation:   container.Isolation(c.Isolation),
 		LogConfig: container.LogConfig{
 			Type:   c.Logging.Driver,
 			Config: utils.CopyMap(c.Logging.Options),
 		},
-		NetworkMode:    container.NetworkMode(c.NetworkMode),
+		NetworkMode:    container.NetworkMode(networkMode),
 		ReadonlyRootfs: c.ReadOnly,
 		OomScoreAdj:    int(c.OomScoreAdj),
 		PidMode:        container.PidMode(c.Pid),
@@ -283,24 +281,6 @@ func Convert(c *config.ServiceConfig, ctx project.Context) (*container.Config, *
 	}
 
 	return config, hostConfig, nil
-}
-
-func getThrottleDevice(throttleConfig yaml.MaporColonSlice) ([]*blkiodev.ThrottleDevice, error) {
-	var throttleDevice []*blkiodev.ThrottleDevice
-	for _, deviceWriteIOps := range throttleConfig {
-		split := strings.Split(deviceWriteIOps, ":")
-		rate, err := strconv.ParseUint(split[1], 10, 64)
-		if err != nil {
-			return nil, err
-		}
-
-		throttleDevice = append(throttleDevice, &blkiodev.ThrottleDevice{
-			Path: split[0],
-			Rate: rate,
-		})
-	}
-
-	return throttleDevice, nil
 }
 
 func getVolumesFrom(volumesFrom []string, serviceConfigs *config.ServiceConfigs, projectName string) ([]string, error) {
@@ -325,7 +305,7 @@ func parseDevices(devices []string) ([]container.DeviceMapping, error) {
 	// parse device mappings
 	deviceMappings := []container.DeviceMapping{}
 	for _, device := range devices {
-		v, err := opts.ParseDevice(device)
+		v, err := parseDevice(device)
 		if err != nil {
 			return nil, err
 		}
@@ -337,4 +317,60 @@ func parseDevices(devices []string) ([]container.DeviceMapping, error) {
 	}
 
 	return deviceMappings, nil
+}
+
+// parseDevice parses a device mapping string to a container.DeviceMapping struct
+// FIXME(vdemeester) de-duplicate this by re-exporting it in docker/docker
+func parseDevice(device string) (container.DeviceMapping, error) {
+	src := ""
+	dst := ""
+	permissions := "rwm"
+	arr := strings.Split(device, ":")
+	switch len(arr) {
+	case 3:
+		permissions = arr[2]
+		fallthrough
+	case 2:
+		if validDeviceMode(arr[1]) {
+			permissions = arr[1]
+		} else {
+			dst = arr[1]
+		}
+		fallthrough
+	case 1:
+		src = arr[0]
+	default:
+		return container.DeviceMapping{}, fmt.Errorf("invalid device specification: %s", device)
+	}
+
+	if dst == "" {
+		dst = src
+	}
+
+	deviceMapping := container.DeviceMapping{
+		PathOnHost:        src,
+		PathInContainer:   dst,
+		CgroupPermissions: permissions,
+	}
+	return deviceMapping, nil
+}
+
+// validDeviceMode checks if the mode for device is valid or not.
+// Valid mode is a composition of r (read), w (write), and m (mknod).
+func validDeviceMode(mode string) bool {
+	var legalDeviceMode = map[rune]bool{
+		'r': true,
+		'w': true,
+		'm': true,
+	}
+	if mode == "" {
+		return false
+	}
+	for _, c := range mode {
+		if !legalDeviceMode[c] {
+			return false
+		}
+		legalDeviceMode[c] = false
+	}
+	return true
 }

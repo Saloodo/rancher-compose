@@ -1,9 +1,8 @@
 // Package registry contains client primitives to interact with a remote Docker registry.
-package registry
+package registry // import "github.com/docker/docker/registry"
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -14,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/distribution/registry/client/transport"
 	"github.com/docker/go-connections/sockets"
 	"github.com/docker/go-connections/tlsconfig"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -64,8 +63,11 @@ func ReadCertsDirectory(tlsConfig *tls.Config, directory string) error {
 	for _, f := range fs {
 		if strings.HasSuffix(f.Name(), ".crt") {
 			if tlsConfig.RootCAs == nil {
-				// TODO(dmcgowan): Copy system pool
-				tlsConfig.RootCAs = x509.NewCertPool()
+				systemPool, err := tlsconfig.SystemCertPool()
+				if err != nil {
+					return fmt.Errorf("unable to get system cert pool: %v", err)
+				}
+				tlsConfig.RootCAs = systemPool
 			}
 			logrus.Debugf("crt: %s", filepath.Join(directory, f.Name()))
 			data, err := ioutil.ReadFile(filepath.Join(directory, f.Name()))
@@ -79,7 +81,7 @@ func ReadCertsDirectory(tlsConfig *tls.Config, directory string) error {
 			keyName := certName[:len(certName)-5] + ".key"
 			logrus.Debugf("cert: %s", filepath.Join(directory, f.Name()))
 			if !hasFile(fs, keyName) {
-				return fmt.Errorf("Missing key %s for client certificate %s. Note that CA certificates should use the extension .crt.", keyName, certName)
+				return fmt.Errorf("missing key %s for client certificate %s. Note that CA certificates should use the extension .crt", keyName, certName)
 			}
 			cert, err := tls.LoadX509KeyPair(filepath.Join(directory, certName), filepath.Join(directory, keyName))
 			if err != nil {
@@ -100,8 +102,8 @@ func ReadCertsDirectory(tlsConfig *tls.Config, directory string) error {
 	return nil
 }
 
-// DockerHeaders returns request modifiers with a User-Agent and metaHeaders
-func DockerHeaders(userAgent string, metaHeaders http.Header) []transport.RequestModifier {
+// Headers returns request modifiers with a User-Agent and metaHeaders
+func Headers(userAgent string, metaHeaders http.Header) []transport.RequestModifier {
 	modifiers := []transport.RequestModifier{}
 	if userAgent != "" {
 		modifiers = append(modifiers, transport.NewHeaderRequestModifier(http.Header{

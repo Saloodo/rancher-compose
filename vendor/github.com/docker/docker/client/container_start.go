@@ -1,4 +1,4 @@
-package client
+package client // import "github.com/docker/docker/client"
 
 import (
 	"net/url"
@@ -13,6 +13,9 @@ func (cli *Client) ContainerStart(ctx context.Context, containerID string, optio
 	query := url.Values{}
 	if len(options.CheckpointID) != 0 {
 		query.Set("checkpoint", options.CheckpointID)
+	}
+	if len(options.CheckpointDir) != 0 {
+		query.Set("checkpoint-dir", options.CheckpointDir)
 	}
 
 	resp, err := cli.post(ctx, "/containers/"+containerID+"/start", query, nil, nil)

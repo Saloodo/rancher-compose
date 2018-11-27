@@ -1,4 +1,4 @@
-package client
+package client // import "github.com/docker/docker/client"
 
 import (
 	"encoding/json"
@@ -14,8 +14,8 @@ import (
 func (cli *Client) NodeList(ctx context.Context, options types.NodeListOptions) ([]swarm.Node, error) {
 	query := url.Values{}
 
-	if options.Filter.Len() > 0 {
-		filterJSON, err := filters.ToParam(options.Filter)
+	if options.Filters.Len() > 0 {
+		filterJSON, err := filters.ToJSON(options.Filters)
 
 		if err != nil {
 			return nil, err

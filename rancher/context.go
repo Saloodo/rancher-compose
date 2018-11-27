@@ -9,22 +9,22 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/docker/libcompose/config"
 	"github.com/docker/libcompose/project"
 	"github.com/docker/libcompose/utils"
 	composeYaml "github.com/docker/libcompose/yaml"
 	"github.com/fatih/structs"
-	legacyClient "github.com/rancher/go-rancher/client"
-	"github.com/rancher/go-rancher/v2"
 	"github.com/ouzklcn/rancher-compose/preprocess"
 	rUtils "github.com/ouzklcn/rancher-compose/utils"
 	rVersion "github.com/ouzklcn/rancher-compose/version"
+	legacyClient "github.com/rancher/go-rancher/client"
+	"github.com/rancher/go-rancher/v2"
 
 	"github.com/hashicorp/go-version"
 )
 
-var projectRegexp = regexp.MustCompile("[^a-zA-Z0-9-]")
+var projectRegexp = regexp.MustCompile("[^a-zA-Z0-9_.-]")
 
 type Context struct {
 	project.Context

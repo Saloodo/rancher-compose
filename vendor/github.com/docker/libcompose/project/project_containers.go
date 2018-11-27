@@ -2,10 +2,10 @@ package project
 
 import (
 	"fmt"
+	"sync"
 
 	"golang.org/x/net/context"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/docker/libcompose/project/events"
 )
 
@@ -13,6 +13,8 @@ import (
 // the Filter struct.
 func (p *Project) Containers(ctx context.Context, filter Filter, services ...string) ([]string, error) {
 	containers := []string{}
+	var lock sync.Mutex
+
 	err := p.forEach(services, wrapperAction(func(wrapper *serviceWrapper, wrappers map[string]*serviceWrapper) {
 		wrapper.Do(nil, events.NoEvent, events.NoEvent, func(service Service) error {
 			serviceContainers, innerErr := service.Containers(ctx)
@@ -21,10 +23,7 @@ func (p *Project) Containers(ctx context.Context, filter Filter, services ...str
 			}
 
 			for _, container := range serviceContainers {
-				running, innerErr := container.IsRunning(ctx)
-				if innerErr != nil {
-					log.Error(innerErr)
-				}
+				running := container.IsRunning(ctx)
 				switch filter.State {
 				case Running:
 					if !running {
@@ -40,11 +39,10 @@ func (p *Project) Containers(ctx context.Context, filter Filter, services ...str
 					// Invalid state filter
 					return fmt.Errorf("Invalid container filter: %s", filter.State)
 				}
-				containerID, innerErr := container.ID()
-				if innerErr != nil {
-					log.Error(innerErr)
-				}
+				containerID := container.ID()
+				lock.Lock()
 				containers = append(containers, containerID)
+				lock.Unlock()
 			}
 			return nil
 		})

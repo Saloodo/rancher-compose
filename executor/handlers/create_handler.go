@@ -5,7 +5,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/docker/libcompose/project/options"
 	"github.com/rancher/event-subscriber/events"
 	"github.com/rancher/go-rancher/v2"

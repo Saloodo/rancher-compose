@@ -1,6 +1,4 @@
-// +build experimental
-
-package client
+package client // import "github.com/docker/docker/client"
 
 import (
 	"golang.org/x/net/context"

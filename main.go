@@ -5,7 +5,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/docker/libcompose/cli/command"
 	rancherApp "github.com/ouzklcn/rancher-compose/app"
 	"github.com/ouzklcn/rancher-compose/executor"

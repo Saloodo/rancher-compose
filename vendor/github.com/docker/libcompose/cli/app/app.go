@@ -10,10 +10,10 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/libcompose/project"
 	"github.com/docker/libcompose/project/options"
 	"github.com/docker/libcompose/version"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
@@ -238,6 +238,27 @@ func ProjectPull(p project.APIProject, c *cli.Context) error {
 func ProjectDelete(p project.APIProject, c *cli.Context) error {
 	options := options.Delete{
 		RemoveVolume: c.Bool("v"),
+	}
+	if !c.Bool("force") {
+		stoppedContainers, err := p.Containers(context.Background(), project.Filter{
+			State: project.Stopped,
+		}, c.Args()...)
+		if err != nil {
+			return cli.NewExitError(err.Error(), 1)
+		}
+		if len(stoppedContainers) == 0 {
+			fmt.Println("No stopped containers")
+			return nil
+		}
+		fmt.Printf("Going to remove %v\nAre you sure? [yN]\n", strings.Join(stoppedContainers, ", "))
+		var answer string
+		_, err = fmt.Scanln(&answer)
+		if err != nil {
+			return cli.NewExitError(err.Error(), 1)
+		}
+		if answer != "y" && answer != "Y" {
+			return nil
+		}
 	}
 	err := p.Delete(context.Background(), options, c.Args()...)
 	if err != nil {

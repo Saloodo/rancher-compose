@@ -4,11 +4,15 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
+
+	"reflect"
 
 	"github.com/docker/docker/pkg/urlutil"
 	"github.com/docker/libcompose/utils"
 	composeYaml "github.com/docker/libcompose/yaml"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
 
@@ -23,14 +27,37 @@ var (
 	}
 )
 
-// CreateConfig unmarshals bytes to config and creates config based on version
+func getComposeMajorVersion(version string) (int, error) {
+	if version == "" {
+		return 1, nil
+	}
+	parts := strings.Split(version, ".")
+	if len(parts) == 1 {
+		return strconv.Atoi(version)
+	} else if len(parts) == 2 {
+		return strconv.Atoi(parts[0])
+	} else {
+		return -1, fmt.Errorf("Invalid version string, expected single integer or dot delimited int.int. Got: %s", version)
+	}
+}
+
+// CreateConfig unmarshals bytes of a YAML manifest file and returns a new
+// Config. Initialize any defaults that can't be parsed (but are optional)
+// across various file formats. Most of these can remain unused.
+//
+// This function only handles parsing YAML in the general case. Any other file
+// format validation should be handled by the caller.
 func CreateConfig(bytes []byte) (*Config, error) {
 	var config Config
 	if err := yaml.Unmarshal(bytes, &config); err != nil {
 		return nil, err
 	}
 
-	if config.Version != "2" {
+	major, err := getComposeMajorVersion(config.Version)
+	if err != nil {
+		return nil, err
+	}
+	if major < 2 {
 		var baseRawServices RawServiceMap
 		if err := yaml.Unmarshal(bytes, &baseRawServices); err != nil {
 			return nil, err
@@ -60,6 +87,18 @@ func Merge(existingServices *ServiceConfigs, environmentLookup EnvironmentLookup
 	}
 	baseRawServices := config.Services
 
+	for service, data := range baseRawServices {
+		for key, value := range data {
+			//check for "extends" key and check whether it is string or not
+			if key == "extends" && reflect.TypeOf(value).Kind() == reflect.String {
+				//converting string to map
+				extendMap := make(map[interface{}]interface{})
+				extendMap["service"] = value
+				baseRawServices[service][key] = extendMap
+			}
+		}
+	}
+
 	if options.Interpolate {
 		if err := InterpolateRawServiceMap(&baseRawServices, environmentLookup); err != nil {
 			return "", nil, nil, nil, err
@@ -88,14 +127,22 @@ func Merge(existingServices *ServiceConfigs, environmentLookup EnvironmentLookup
 		}
 	}
 
+	major, err := getComposeMajorVersion(config.Version)
+	if err != nil {
+		return "", nil, nil, nil, err
+	}
+
 	var serviceConfigs map[string]*ServiceConfig
-	if config.Version == "2" {
+	switch major {
+	case 3:
+		logrus.Fatal("Note: Compose file version 3 is not yet implemented")
+	case 2:
 		var err error
 		serviceConfigs, err = MergeServicesV2(existingServices, environmentLookup, resourceLookup, file, baseRawServices, options)
 		if err != nil {
 			return "", nil, nil, nil, err
 		}
-	} else {
+	default:
 		serviceConfigsV1, err := MergeServicesV1(existingServices, environmentLookup, resourceLookup, file, baseRawServices, options)
 		if err != nil {
 			return "", nil, nil, nil, err
@@ -121,11 +168,6 @@ func Merge(existingServices *ServiceConfigs, environmentLookup EnvironmentLookup
 	if err := utils.Convert(config.Volumes, &volumes); err != nil {
 		return "", nil, nil, nil, err
 	}
-	for i, volume := range volumes {
-		if volume == nil {
-			volumes[i] = &VolumeConfig{}
-		}
-	}
 	if err := utils.Convert(config.Networks, &networks); err != nil {
 		return "", nil, nil, nil, err
 	}
@@ -133,6 +175,7 @@ func Merge(existingServices *ServiceConfigs, environmentLookup EnvironmentLookup
 	return config.Version, serviceConfigs, volumes, networks, nil
 }
 
+// InterpolateRawServiceMap replaces varialbse in raw service map struct based on environment lookup
 func InterpolateRawServiceMap(baseRawServices *RawServiceMap, environmentLookup EnvironmentLookup) error {
 	for k, v := range *baseRawServices {
 		for k2, v2 := range v {
@@ -220,19 +263,11 @@ func readEnvFile(resourceLookup ResourceLookup, inFile string, serviceData RawSe
 
 	serviceData["environment"] = vars
 
-	delete(serviceData, "env_file")
-
 	return serviceData, nil
 }
 
 func mergeConfig(baseService, serviceData RawService) RawService {
 	for k, v := range serviceData {
-		// Image and build are mutually exclusive in merge
-		if k == "image" {
-			delete(baseService, "build")
-		} else if k == "build" {
-			delete(baseService, "image")
-		}
 		existing, ok := baseService[k]
 		if ok {
 			baseService[k] = merge(existing, v)

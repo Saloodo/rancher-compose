@@ -3,7 +3,7 @@ package app
 import (
 	"golang.org/x/net/context"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/docker/libcompose/cli/app"
 	"github.com/docker/libcompose/cli/command"
 	"github.com/docker/libcompose/cli/logger"

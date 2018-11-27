@@ -5,7 +5,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/docker/libcompose/config"
 	"github.com/docker/libcompose/project"
 	"github.com/rancher/go-rancher/v2"
@@ -66,7 +66,6 @@ type Volume struct {
 	driver        string
 	driverOptions map[string]string
 	external      bool
-	perContainer  bool
 }
 
 // InspectTemplate looks up a volume template
@@ -160,7 +159,6 @@ func (v *Volume) create(ctx context.Context) error {
 		Driver:       v.driver,
 		DriverOpts:   driverOptions,
 		StackId:      v.context.Stack.Id,
-		PerContainer: v.perContainer,
 	})
 	return err
 }
@@ -173,6 +171,5 @@ func NewVolume(projectName, name string, config *config.VolumeConfig, context *C
 		driver:        config.Driver,
 		driverOptions: config.DriverOpts,
 		external:      config.External.External,
-		perContainer:  config.PerContainer,
 	}
 }

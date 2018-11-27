@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/libcompose/config"
 	"github.com/docker/libcompose/docker/service"
@@ -683,6 +683,7 @@ func (r *RancherService) Run(ctx context.Context, commandParts []string, options
 }
 
 func (r *RancherService) RemoveImage(ctx context.Context, imageType options.ImageType) error {
+
 	return project.ErrUnsupported
 }
 

@@ -3,7 +3,7 @@ package executor
 import (
 	"os"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/rancher/event-subscriber/events"
 	"github.com/rancher/go-rancher/v2"
 	"github.com/ouzklcn/rancher-compose/executor/handlers"

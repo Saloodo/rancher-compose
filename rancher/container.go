@@ -16,8 +16,8 @@ func NewContainer(id, name string) *Container {
 	}
 }
 
-func (c *Container) ID() (string, error) {
-	return c.id, nil
+func (c *Container) ID() string {
+	return c.id
 }
 
 func (c *Container) Name() string {
@@ -30,6 +30,6 @@ func (c *Container) Port(ctx context.Context, port string) (string, error) {
 }
 
 // TODO implement
-func (c *Container) IsRunning(ctx context.Context) (bool, error) {
-	return false, project.ErrUnsupported
+func (c *Container) IsRunning(ctx context.Context) bool {
+	return false
 }

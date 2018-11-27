@@ -3,23 +3,41 @@ import:
   version: 388960b655244e76e24c75f48631564eaefade62
 - package: github.com/Microsoft/go-winio
   version: v0.3.4
-- package: github.com/Sirupsen/logrus
-  version: 26709e2714106fb8ad40b773b711ebce25b78914
+- package: github.com/Nvveen/Gotty
+  version: 6018b68f96b839edfbe3fb48668853f5dbad88a3
+  repo: https://github.com/ijc25/Gotty
+- package: github.com/aws/aws-lambda-go
+  version: v1.6.0
+- package: github.com/aws/aws-sdk-go
+  version: v1.15.57
+- package: github.com/containerd/continuity
+  version: 35d55c5e8dd23b32037d56cf97174aff3efdfa83
+- package: github.com/docker/cli
+  version: 3352c0e137e80b7e10fb0efc9812df7bca9497a2
 - package: github.com/docker/distribution
-  version: 77b9d2997abcded79a5314970fe69a44c93c25fb
+  version: edc3ab29cdff8694dd6feb85cfeb4b5f1b38ed9c
 - package: github.com/docker/docker
-  version: 8658748ef716e43a5f6d834825d818012ed6e2c4
+  version: 0ede01237c9ab871f1b8db0364427407f3e46541
+- package: github.com/docker/docker-credential-helpers
+  version: 3c90bd29a46b943b2a9842987b58fb91a7c1819b
 - package: github.com/docker/go-connections
-  version: 988efe982fdecb46f01d53465878ff1f2ff411ce
+  version: 3ede32e2033de7505e6500d6c868c2b9ed9f169d
 - package: github.com/docker/go-units
-  version: f2d77a61e3c169b43402a0a1e84f06daf29b8190
+  version: 9e638d38cf6977a37a8ea0078f3ee75a7cdb2dd1
 - package: github.com/docker/libcompose
-  version: 14ae29b91e4aa6e01eda612e4c69c420d6124e8b
-  repo: https://github.com/rancher/libcompose
+  version: a86fb3c8479894bbaed76a230ef5b35eb83338ac
 - package: github.com/fatih/structs
   version: dc3312cb1a4513a366c4c9e622ad55c32df12ed3
 - package: github.com/flynn/go-shlex
   version: 3f9db97f856818214da2e1057f8ad84803971cff
+- package: github.com/go-ini/ini
+  version: v1.39.0
+- package: github.com/gogo/protobuf
+  version: v0.4
+- package: github.com/google/go-github
+  version: v18.2.0
+- package: github.com/google/go-querystring
+  version: v1.0.0
 - package: github.com/gorilla/context
   version: 14f550f51a
 - package: github.com/gorilla/mux
@@ -28,6 +46,16 @@ import:
   version: 1551221275a7bd42978745a376b2531f791d88f3
 - package: github.com/hashicorp/go-version
   version: 2b9865f60ce11e527bd1255ba82036d465570aa3
+- package: github.com/jmespath/go-jmespath
+  version: c2b33e8439af944379acbdd9c3a5fe0bc44bd8a5
+- package: github.com/kballard/go-shellquote
+  version: 95032a82bc518f77982ea72343cc1ade730072f0
+- package: github.com/mozillazg/go-unidecode
+  version: 8772af720c7f2f4d216cc73c5f23de17450dd008
+- package: github.com/opencontainers/go-digest
+  version: a6d0ee40d4207ea02364bd3b9e8e77b9159ba1eb
+- package: github.com/opencontainers/image-spec
+  version: f03dbe35d449c54915d235f1a3cf8f585a24babe
 - package: github.com/opencontainers/runc
   version: cc29e3dded8e27ba8f65738f40d251c885030a28
 - package: github.com/pkg/errors
@@ -38,12 +66,10 @@ import:
   version: af955cd2925739b199df4077fafaddfaa4834a2f
 - package: github.com/rancher/rancher-catalog-service
   version: a3a8b500adceb82b3a0387b2c7b06a60e7eeee9a
-- package: github.com/spf13/pflag
-  version: cb88ea77998c3f024757528e3305022ab50b43be
+- package: github.com/sirupsen/logrus
+  version: v1.0.3
 - package: github.com/urfave/cli
   version: v1.18.0
-- package: github.com/vbatts/tar-split
-  version: v0.9.11
 - package: github.com/xeipuuv/gojsonpointer
   version: e0fe6f68307607d540ed8eac07a342c33fa1b54a
 - package: github.com/xeipuuv/gojsonreference
@@ -55,8 +81,10 @@ import:
 - package: golang.org/x/net
   version: 2beffdc2e92c8a3027590f898fe88f69af48a3f8
   repo: https://github.com/tonistiigi/net.git
+- package: golang.org/x/oauth2
+  version: 9dcd33a902f40452422c2367fefcb95b54f9f8f8
 - package: golang.org/x/sys
-  version: eb2c74142fd19a79b3f237334c7384d5167b1b46
+  version: 8dbc5d05d6edcc104950cc299a1ce6641235bc86
 - package: golang.org/x/time
   version: a4bde12657593d5e90d0533a3e4fd95e635124cb
 - package: gopkg.in/yaml.v2

@@ -4,18 +4,19 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
 	"golang.org/x/net/context"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/docker/libcompose/config"
 	"github.com/docker/libcompose/logger"
 	"github.com/docker/libcompose/lookup"
 	"github.com/docker/libcompose/project/events"
 	"github.com/docker/libcompose/utils"
 	"github.com/docker/libcompose/yaml"
+	log "github.com/sirupsen/logrus"
 )
 
 // ComposeVersion is name of docker-compose.yml file syntax supported version
@@ -65,7 +66,17 @@ func NewProject(context *Context, runtime RuntimeProject, parseOptions *config.P
 	}
 
 	if context.EnvironmentLookup == nil {
-		cwd, err := os.Getwd()
+		var envPath, absPath, cwd string
+		var err error
+		if len(context.ComposeFiles) > 0 {
+			absPath, err = filepath.Abs(context.ComposeFiles[0])
+			dir, _ := path.Split(absPath)
+			envPath = filepath.Join(dir, ".env")
+		} else {
+			cwd, err = os.Getwd()
+			envPath = filepath.Join(cwd, ".env")
+		}
+
 		if err != nil {
 			log.Errorf("Could not get the rooted path name to the current directory: %v", err)
 			return nil
@@ -73,7 +84,7 @@ func NewProject(context *Context, runtime RuntimeProject, parseOptions *config.P
 		context.EnvironmentLookup = &lookup.ComposableEnvLookup{
 			Lookups: []config.EnvironmentLookup{
 				&lookup.EnvfileLookup{
-					Path: filepath.Join(cwd, ".env"),
+					Path: envPath,
 				},
 				&lookup.OsEnvLookup{},
 			},
@@ -150,7 +161,7 @@ func (p *Project) CreateService(name string) (Service, error) {
 
 		// check the environment for extra build Args that are set but not given a value in the compose file
 		for arg, value := range config.Build.Args {
-			if value == "\x00" {
+			if *value == "\x00" {
 				envValue := p.context.EnvironmentLookup.Lookup(arg, &config)
 				// depending on what we get back we do different things
 				switch l := len(envValue); l {
@@ -158,9 +169,9 @@ func (p *Project) CreateService(name string) (Service, error) {
 					delete(config.Build.Args, arg)
 				case 1:
 					parts := strings.SplitN(envValue[0], "=", 2)
-					config.Build.Args[parts[0]] = parts[1]
+					config.Build.Args[parts[0]] = &parts[1]
 				default:
-					return nil, fmt.Errorf("Tried to set Build Arg %#v to multi-value %#v.", arg, envValue)
+					return nil, fmt.Errorf("tried to set Build Arg %#v to multi-value %#v", arg, envValue)
 				}
 			}
 		}
@@ -232,7 +243,7 @@ func (p *Project) load(file string, bytes []byte) error {
 
 	// Update network configuration a little bit
 	p.handleNetworkConfig()
-	//p.handleVolumeConfig()
+	p.handleVolumeConfig()
 
 	if p.context.NetworksFactory != nil {
 		networks, err := p.context.NetworksFactory.Create(p.Name, p.NetworkConfigs, p.ServiceConfigs, p.isNetworkEnabled())
@@ -267,15 +278,18 @@ func (p *Project) handleNetworkConfig() {
 				serviceConfig.Networks = &yaml.Networks{
 					Networks: []*yaml.Network{
 						{
-							Name: "default",
+							Name:     "default",
+							RealName: fmt.Sprintf("%s_%s", p.Name, "default"),
 						},
 					},
 				}
+				p.AddNetworkConfig("default", &config.NetworkConfig{})
 			}
 			// Consolidate the name of the network
 			// FIXME(vdemeester) probably shouldn't be there, maybe move that to interface/factory
 			for _, network := range serviceConfig.Networks.Networks {
-				if net, ok := p.NetworkConfigs[network.Name]; ok {
+				net, ok := p.NetworkConfigs[network.Name]
+				if ok && net != nil {
 					if net.External.External {
 						network.RealName = network.Name
 						if net.External.Name != "" {
@@ -283,6 +297,12 @@ func (p *Project) handleNetworkConfig() {
 						}
 					} else {
 						network.RealName = p.Name + "_" + network.Name
+					}
+				} else {
+					network.RealName = p.Name + "_" + network.Name
+
+					p.NetworkConfigs[network.Name] = &config.NetworkConfig{
+						External: yaml.External{External: false},
 					}
 				}
 				// Ignoring if we don't find the network, it will be catched later
@@ -310,7 +330,7 @@ func (p *Project) handleVolumeConfig() {
 				}
 
 				vol, ok := p.VolumeConfigs[volume.Source]
-				if !ok {
+				if !ok || vol == nil {
 					continue
 				}
 

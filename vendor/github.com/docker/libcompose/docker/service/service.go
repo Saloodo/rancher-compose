@@ -7,7 +7,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
@@ -26,6 +25,7 @@ import (
 	"github.com/docker/libcompose/project/options"
 	"github.com/docker/libcompose/utils"
 	"github.com/docker/libcompose/yaml"
+	"github.com/sirupsen/logrus"
 )
 
 // Service is a project.Service implementations.
@@ -215,8 +215,7 @@ func (s *Service) constructContainers(ctx context.Context, count int) ([]*contai
 			return nil, err
 		}
 
-		// FIXME(vdemeester) use property/method instead
-		id, _ := c.ID()
+		id := c.ID()
 		logrus.Debugf("Created container %s: %v", id, c.Name())
 
 		result = append(result, c)
@@ -258,7 +257,7 @@ func (s *Service) Run(ctx context.Context, commandParts []string, options option
 		return -1, err
 	}
 
-	configOverride := &config.ServiceConfig{Command: commandParts, Tty: true, StdinOpen: true}
+	configOverride := &config.ServiceConfig{Command: commandParts, Tty: !options.DisableTty, StdinOpen: !options.DisableTty}
 
 	c, err := s.createContainer(ctx, namer, "", configOverride, true)
 	if err != nil {
@@ -358,13 +357,12 @@ func (s *Service) connectContainerToNetworks(ctx context.Context, c *container.C
 	}
 	if s.serviceConfig.Networks != nil {
 		for _, network := range s.serviceConfig.Networks.Networks {
-			existingNetwork, ok := connectedNetworks[network.Name]
+			existingNetwork, ok := connectedNetworks[network.RealName]
 			if ok {
 				// FIXME(vdemeester) implement alias checking (to not disconnect/reconnect for nothing)
 				aliasPresent := false
 				for _, alias := range existingNetwork.Aliases {
-					// FIXME(vdemeester) use shortID instead of ID
-					ID, _ := c.ID()
+					ID := c.ShortID()
 					if alias == ID {
 						aliasPresent = true
 					}
@@ -386,7 +384,7 @@ func (s *Service) connectContainerToNetworks(ctx context.Context, c *container.C
 
 // NetworkDisconnect disconnects the container from the specified network
 func (s *Service) NetworkDisconnect(ctx context.Context, c *container.Container, net *yaml.Network, oneOff bool) error {
-	containerID, _ := c.ID()
+	containerID := c.ID()
 	client := s.clientFactory.Create(s)
 	return client.NetworkDisconnect(ctx, net.RealName, containerID, true)
 }
@@ -394,7 +392,7 @@ func (s *Service) NetworkDisconnect(ctx context.Context, c *container.Container,
 // NetworkConnect connects the container to the specified network
 // FIXME(vdemeester) will be refactor with Container refactoring
 func (s *Service) NetworkConnect(ctx context.Context, c *container.Container, net *yaml.Network, oneOff bool) error {
-	containerID, _ := c.ID()
+	containerID := c.ID()
 	client := s.clientFactory.Create(s)
 	internalLinks, err := s.getLinks()
 	if err != nil {
@@ -413,6 +411,20 @@ func (s *Service) NetworkConnect(ctx context.Context, c *container.Container, ne
 		aliases = []string{s.Name()}
 	}
 	aliases = append(aliases, net.Aliases...)
+	if len(net.Aliases) >= 1 {
+		logrus.Infof("connect")
+		client.NetworkConnect(ctx, net.RealName, containerID, &network.EndpointSettings{
+			Aliases:   aliases,
+			Links:     links,
+			IPAddress: net.IPv4Address,
+			IPAMConfig: &network.EndpointIPAMConfig{
+				IPv4Address: net.IPv4Address,
+				IPv6Address: net.IPv6Address,
+			},
+		})
+		logrus.Infof("disconnect")
+		client.NetworkDisconnect(ctx, net.RealName, containerID, true)
+	}
 	return client.NetworkConnect(ctx, net.RealName, containerID, &network.EndpointSettings{
 		Aliases:   aliases,
 		Links:     links,
@@ -452,7 +464,7 @@ func (s *Service) recreateIfNeeded(ctx context.Context, c *container.Container, 
 
 func (s *Service) recreate(ctx context.Context, c *container.Container) (*container.Container, error) {
 	name := c.Name()
-	id, _ := c.ID()
+	id := c.ID()
 	newName := fmt.Sprintf("%s_%s", name, id[:12])
 	logrus.Debugf("Renaming %s => %s", name, newName)
 	if err := c.Rename(ctx, newName); err != nil {
@@ -464,7 +476,7 @@ func (s *Service) recreate(ctx context.Context, c *container.Container) (*contai
 	if err != nil {
 		return nil, err
 	}
-	newID, _ := newContainer.ID()
+	newID := newContainer.ID()
 	logrus.Debugf("Created replacement container %s", newID)
 	if err := c.Remove(ctx, false); err != nil {
 		logrus.Errorf("Failed to remove old container %s", c.Name())
@@ -490,7 +502,7 @@ func (s *Service) OutOfSync(ctx context.Context, c *container.Container) (bool, 
 
 	image, err := image.InspectImage(ctx, s.clientFactory.Create(s), c.ImageConfig())
 	if err != nil {
-		if client.IsErrImageNotFound(err) {
+		if client.IsErrNotFound(err) {
 			logrus.Debugf("Image %s do not exist, do not know if it's out of sync", c.Image())
 			return false, nil
 		}
@@ -527,6 +539,7 @@ func (s *Service) eachContainer(ctx context.Context, containers []*container.Con
 
 // Stop implements Service.Stop. It stops any containers related to the service.
 func (s *Service) Stop(ctx context.Context, timeout int) error {
+	timeout = s.stopTimeout(timeout)
 	return s.collectContainersAndDo(ctx, func(c *container.Container) error {
 		return c.Stop(ctx, timeout)
 	})
@@ -534,6 +547,7 @@ func (s *Service) Stop(ctx context.Context, timeout int) error {
 
 // Restart implements Service.Restart. It restarts any containers related to the service.
 func (s *Service) Restart(ctx context.Context, timeout int) error {
+	timeout = s.stopTimeout(timeout)
 	return s.collectContainersAndDo(ctx, func(c *container.Container) error {
 		return c.Restart(ctx, timeout)
 	})
@@ -549,7 +563,7 @@ func (s *Service) Kill(ctx context.Context, signal string) error {
 // Delete implements Service.Delete. It removes any containers related to the service.
 func (s *Service) Delete(ctx context.Context, options options.Delete) error {
 	return s.collectContainersAndDo(ctx, func(c *container.Container) error {
-		running, _ := c.IsRunning(ctx)
+		running := c.IsRunning(ctx)
 		if !running || options.RemoveRunning {
 			return c.Remove(ctx, options.RemoveVolume)
 		}
@@ -589,6 +603,7 @@ func (s *Service) Scale(ctx context.Context, scale int, timeout int) error {
 		for _, c := range containers {
 			foundCount++
 			if foundCount > scale {
+				timeout = s.stopTimeout(timeout)
 				if err := c.Stop(ctx, timeout); err != nil {
 					return err
 				}
@@ -729,4 +744,20 @@ func (s *Service) specificiesHostPort() bool {
 	}
 
 	return false
+}
+
+//take in timeout flag from cli as parameter
+//return timeout if it is set,
+//else return stop_grace_period if it is set,
+//else return default 10s
+func (s *Service) stopTimeout(timeout int) int {
+	DEFAULTTIMEOUT := 10
+	if timeout != 0 {
+		return timeout
+	}
+	configTimeout := utils.DurationStrToSecondsInt(s.Config().StopGracePeriod)
+	if configTimeout != nil {
+		return *configTimeout
+	}
+	return DEFAULTTIMEOUT
 }

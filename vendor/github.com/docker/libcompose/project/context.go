@@ -9,9 +9,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/libcompose/config"
 	"github.com/docker/libcompose/logger"
+	"github.com/sirupsen/logrus"
 )
 
 var projectRegexp = regexp.MustCompile("[^a-zA-Z0-9_.-]")
@@ -115,7 +115,8 @@ func (c *Context) lookupProjectName() (string, error) {
 }
 
 func normalizeName(name string) string {
-	return name
+	r := regexp.MustCompile("[^a-z0-9]+")
+	return r.ReplaceAllString(strings.ToLower(name), "")
 }
 
 func toUnixPath(p string) string {
