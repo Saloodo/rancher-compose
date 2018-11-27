@@ -19,7 +19,25 @@ import (
 type ProjectFactory struct {
 }
 
+type ProjectDeleter struct {
+}
+
 func (p *ProjectFactory) Create(c *cli.Context) (project.APIProject, error) {
+	githubClient, err := rancher.Create(c)
+	if err != nil {
+		return nil, err
+	}
+
+	err = githubClient.DownloadDockerComposeFile(c.GlobalStringSlice("file"), c.GlobalString("github-docker-file"))
+	if err != nil {
+		return nil, err
+	}
+
+	err = githubClient.DownloadRancherComposeFile(c.GlobalString("rancher-file"), c.GlobalString("github-rancher-file"))
+	if err != nil {
+		return nil, err
+	}
+
 	rancherComposeFile, err := rancher.ResolveRancherCompose(c.GlobalString("file"),
 		c.GlobalString("rancher-file"))
 	if err != nil {
@@ -36,7 +54,7 @@ func (p *ProjectFactory) Create(c *cli.Context) (project.APIProject, error) {
 		return nil, err
 	}
 
-	context := &rancher.Context{
+	ctx := &rancher.Context{
 		Context: project.Context{
 			ResourceLookup:    &rLookup.FileResourceLookup{},
 			EnvironmentLookup: envLookup,
@@ -51,19 +69,92 @@ func (p *ProjectFactory) Create(c *cli.Context) (project.APIProject, error) {
 		Args:               c.Args(),
 		BindingsFile:       c.GlobalString("bindings-file"),
 	}
-	qLookup.Context = context
+	qLookup.Context = ctx
 
-	command.Populate(&context.Context, c)
+	command.Populate(&ctx.Context, c)
 
-	context.Upgrade = c.Bool("upgrade") || c.Bool("force-upgrade")
-	context.ForceUpgrade = c.Bool("force-upgrade")
-	context.Rollback = c.Bool("rollback")
-	context.BatchSize = int64(c.Int("batch-size"))
-	context.Interval = int64(c.Int("interval"))
-	context.ConfirmUpgrade = c.Bool("confirm-upgrade")
-	context.Pull = c.Bool("pull")
+	ctx.Upgrade = c.Bool("upgrade") || c.Bool("force-upgrade")
+	ctx.ForceUpgrade = c.Bool("force-upgrade")
+	ctx.Rollback = c.Bool("rollback")
+	ctx.BatchSize = int64(c.Int("batch-size"))
+	ctx.Interval = int64(c.Int("interval"))
+	ctx.ConfirmUpgrade = c.Bool("confirm-upgrade")
+	ctx.Pull = c.Bool("pull")
 
-	return rancher.NewProject(context)
+	return rancher.NewProject(ctx)
+}
+
+func (p *ProjectDeleter) Delete(c *cli.Context) (error) {
+	githubClient, err := rancher.Create(c)
+	if err != nil {
+		return err
+	}
+
+	err = githubClient.DownloadDockerComposeFile(c.GlobalStringSlice("file"), c.GlobalString("github-docker-file"))
+	if err != nil {
+		return err
+	}
+
+	err = githubClient.DownloadRancherComposeFile(c.GlobalString("rancher-file"), c.GlobalString("github-rancher-file"))
+	if err != nil {
+		return err
+	}
+
+	rancherComposeFile, err := rancher.ResolveRancherCompose(c.GlobalString("file"),
+		c.GlobalString("rancher-file"))
+	if err != nil {
+		return err
+	}
+
+	qLookup, err := rLookup.NewQuestionLookup(rancherComposeFile, &lookup.OsEnvLookup{})
+	if err != nil {
+		return err
+	}
+
+	envLookup, err := rLookup.NewFileEnvLookup(c.GlobalString("env-file"), qLookup)
+	if err != nil {
+		return err
+	}
+
+	ctx := &rancher.Context{
+		Context: project.Context{
+			ResourceLookup:    &rLookup.FileResourceLookup{},
+			EnvironmentLookup: envLookup,
+			LoggerFactory:     logger.NewColorLoggerFactory(),
+		},
+		RancherComposeFile: c.GlobalString("rancher-file"),
+		Url:                c.GlobalString("url"),
+		AccessKey:          c.GlobalString("access-key"),
+		SecretKey:          c.GlobalString("secret-key"),
+		PullCached:         c.Bool("cached"),
+		Uploader:           &rancher.S3Uploader{},
+		Args:               c.Args(),
+		BindingsFile:       c.GlobalString("bindings-file"),
+	}
+	qLookup.Context = ctx
+
+	command.Populate(&ctx.Context, c)
+
+	ctx.Upgrade = c.Bool("upgrade") || c.Bool("force-upgrade")
+	ctx.ForceUpgrade = c.Bool("force-upgrade")
+	ctx.Rollback = c.Bool("rollback")
+	ctx.BatchSize = int64(c.Int("batch-size"))
+	ctx.Interval = int64(c.Int("interval"))
+	ctx.ConfirmUpgrade = c.Bool("confirm-upgrade")
+	ctx.Pull = c.Bool("pull")
+
+	return rancher.DeleteProject(ctx)
+}
+
+
+func RemoveStack(deleter ProjectDeleter) func(context *cli.Context) error {
+	return func(context *cli.Context) error {
+		err := deleter.Delete(context)
+		if err != nil {
+			logrus.Fatalf("Failed to read project: %v", err)
+		}
+		return err
+	}
 }
 
 func UpgradeCommand(factory app.ProjectFactory) cli.Command {
@@ -224,6 +315,21 @@ func ProjectUp(p project.APIProject, c *cli.Context) error {
 	return nil
 }
 
+func ProjectDown(p project.APIProject, c *cli.Context) error {
+	err := p.Stop(context.Background(), c.Int("timeout"), c.Args()...)
+	if err != nil {
+		return cli.NewExitError(err.Error(), 1)
+	}
+
+	err = p.Delete(context.Background(), options.Delete{
+		RemoveVolume: c.Bool("v"),
+	}, c.Args()...)
+	if err != nil {
+		return cli.NewExitError(err.Error(), 1)
+	}
+	return nil
+}
+
 func Upgrade(p project.APIProject, c *cli.Context) error {
 	args := c.Args()
 	if len(args) != 2 {
@@ -250,10 +356,33 @@ func Upgrade(p project.APIProject, c *cli.Context) error {
 func StopCommand(factory app.ProjectFactory) cli.Command {
 	return cli.Command{
 		Name:      "stop",
-		ShortName: "down",
 		Usage:     "Stop services",
 		Action:    app.WithProject(factory, app.ProjectStop),
 		Flags: []cli.Flag{
+			cli.IntFlag{
+				Name:  "timeout,t",
+				Usage: "Specify a shutdown timeout in seconds.",
+				Value: 10,
+			},
+		},
+	}
+}
+
+func DownCommand(factory app.ProjectFactory, deleter ProjectDeleter) cli.Command {
+	return cli.Command{
+		Name:   "down",
+		Usage:  "Stop services",
+		Action: app.WithProject(factory, ProjectDown),
+		After:  RemoveStack(deleter),
+		Flags: []cli.Flag{
+			cli.BoolFlag{
+				Name:  "force,f",
+				Usage: "Allow deletion of all services",
+			},
+			cli.BoolFlag{
+				Name:  "v",
+				Usage: "Remove volumes associated with containers",
+			},
 			cli.IntFlag{
 				Name:  "timeout,t",
 				Usage: "Specify a shutdown timeout in seconds.",

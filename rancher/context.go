@@ -272,6 +272,30 @@ func (c *Context) open() error {
 	return nil
 }
 
+func (c *Context) delete() error {
+	c.ProjectName = c.sanitizedProjectName()
+
+	if err := c.readRancherConfig(); err != nil {
+		return err
+	}
+
+	if _, err := c.loadClient(); err != nil {
+		return err
+	}
+
+	if stackSchema, ok := c.Client.GetTypes()["stack"]; !ok || !rUtils.Contains(stackSchema.CollectionMethods, "POST") {
+		return fmt.Errorf("Can not create a stack, check API key [%s] for [%s]", c.AccessKey, c.Url)
+	}
+
+	c.checkVersion()
+
+	if err := c.RemoveStack(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (c *Context) checkVersion() {
 	// We don't care about errors from this code
 	newVersion := c.getSetting("rancher.compose.version")
@@ -367,4 +391,63 @@ func (c *Context) LoadStack() (*client.Stack, error) {
 	c.Stack = stack
 
 	return c.Stack, nil
+}
+
+func (c *Context) RemoveStack() (error) {
+	projectName := c.sanitizedProjectName()
+	if _, err := c.loadClient(); err != nil {
+		return err
+	}
+
+	logrus.Debugf("Looking for stack %s", projectName)
+	// First try by name
+	stacks, err := c.Client.Stack.List(&client.ListOpts{
+		Filters: map[string]interface{}{
+			"name":         projectName,
+			"removed_null": nil,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, stack := range stacks.Data {
+		if strings.EqualFold(projectName, stack.Name) {
+			logrus.Debugf("Found stack: %s(%s)", stack.Name, stack.Id)
+			c.Stack = &stack
+			logrus.Infof("Removing stack %s", projectName)
+			err = c.Client.Stack.Delete(&stack)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}
+	}
+
+	// Now try not by name for case sensitive databases
+	stacks, err = c.Client.Stack.List(&client.ListOpts{
+		Filters: map[string]interface{}{
+			"removed_null": nil,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, stack := range stacks.Data {
+		if strings.EqualFold(projectName, stack.Name) {
+			logrus.Debugf("Found stack: %s(%s)", stack.Name, stack.Id)
+			c.Stack = &stack
+			logrus.Infof("Removing stack %s", projectName)
+			err = c.Client.Stack.Delete(&stack)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}
+	}
+
+	return nil
 }
